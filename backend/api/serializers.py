@@ -104,9 +104,6 @@ class RecipeReadSerializer(ModelSerializer):
     is_favorited = SerializerMethodField(read_only=True)
     is_in_shopping_cart = SerializerMethodField(read_only=True)
 
-    def user_is_anonymous(self):
-        return self.context.get('request').user.is_anonymous
-
     def get_ingredients(self, obj):
         recipe = obj
         ingredients = recipe.ingredients.values(
@@ -117,15 +114,21 @@ class RecipeReadSerializer(ModelSerializer):
         )
         return ingredients
 
+    def get_user(self):
+        return self.context.get('request').user
+
+    def check_user_association(self, obj, association_filter):
+        user = self.get_user()
+        if user.is_anonymous:
+            return False
+        return association_filter(user).filter(recipe=obj).exists()
+
     def get_is_favorited(self, obj):
-        user = self.context.get('request').user
-        return (not self.user_is_anonymous() and
-                user.favorites.filter(recipe=obj).exists())
+        return self.check_user_association(obj, lambda user: user.favorites)
 
     def get_is_in_shopping_cart(self, obj):
-        user = self.context.get('request').user
-        return (not self.user_is_anonymous() and
-                user.shopping_cart.filter(recipe=obj).exists())
+        return self.check_user_association(obj, lambda user:
+                                           user.shopping_cart)
 
     class Meta:
         model = Recipe
